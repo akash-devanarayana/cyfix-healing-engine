@@ -3,8 +3,6 @@ const cheerio = require('cheerio');
 const app = express();
 const PORT = 3000;
 
-// This will act as our simple, in-memory database.
-// A Map is great here for storing key-value pairs (selector -> fingerprint).
 const fingerprintStore = new Map();
 
 // Middleware to parse JSON bodies from incoming requests
@@ -37,23 +35,19 @@ app.post('/heal', (req, res) => {
     }
 
     const $ = cheerio.load(domSnapshot);
-    // ⭐ Keep track of all candidates with the top score
     let topCandidates = [];
     let topScore = 0;
     let bestCandidate = {element: null, score: 0};
 
-    // --- New Scoring Logic ---
-    // Search every element on the page
     $('*').each((index, element) => {
         let currentScore = 0;
         const $el = $(element);
 
-        // Compare each attribute from the stored fingerprint
         if (storedFingerprint.tagName === $el.prop('tagName')) {
             currentScore += 1;
         }
         if (storedFingerprint.innerText && storedFingerprint.innerText === $el.text().trim()) {
-            currentScore += 5; // Text match is very important
+            currentScore += 5;
         }
         if (storedFingerprint.className && storedFingerprint.className === $el.attr('class')) {
             currentScore += 3;
@@ -68,17 +62,16 @@ app.post('/heal', (req, res) => {
             currentScore += 4;
         }
 
-        // --- New Logic to Handle Ties ---
+        // --- Logic to Handle Ties ---
         if (currentScore > topScore) {
             topScore = currentScore;
-            topCandidates = [element]; // Start a new list with the new high-scorer
+            topCandidates = [element];
         } else if (currentScore > 0 && currentScore === topScore) {
-            topCandidates.push(element); // Add to the list of ties
+            topCandidates.push(element);
         }
     });
 
-    // --- New Check for Ambiguity ---
-    // Only proceed if we found a good score AND there is only ONE best candidate
+    // --- Check for Ambiguity ---
     if (topScore > 5 && topCandidates.length === 1) {
         const bestCandidate = topCandidates[0];
         const newId = $(bestCandidate).attr('id');
@@ -89,7 +82,6 @@ app.post('/heal', (req, res) => {
         }
     }
 
-    // If there was a tie, report the ambiguity
     if (topCandidates.length > 1) {
         console.log(`Heal failed: Ambiguous match. Found ${topCandidates.length} elements with score ${topScore} for "${brokenSelector}"`);
         return res.status(409).send({message: `Healing failed due to ambiguity. Found ${topCandidates.length} matching elements.`}); // 409 Conflict
