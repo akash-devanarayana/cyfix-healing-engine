@@ -37,6 +37,9 @@ app.post('/heal', (req, res) => {
     }
 
     const $ = cheerio.load(domSnapshot);
+    // ⭐ Keep track of all candidates with the top score
+    let topCandidates = [];
+    let topScore = 0;
     let bestCandidate = {element: null, score: 0};
 
     // --- New Scoring Logic ---
@@ -65,21 +68,31 @@ app.post('/heal', (req, res) => {
             currentScore += 4;
         }
 
-
-        // If this element has a higher score, it becomes the new best candidate
-        if (currentScore > bestCandidate.score) {
-            bestCandidate = {element, score: currentScore};
+        // --- New Logic to Handle Ties ---
+        if (currentScore > topScore) {
+            topScore = currentScore;
+            topCandidates = [element]; // Start a new list with the new high-scorer
+        } else if (currentScore > 0 && currentScore === topScore) {
+            topCandidates.push(element); // Add to the list of ties
         }
     });
 
-    // Check if we found a reasonably good match
-    if (bestCandidate.score > 5) { // Set a minimum threshold
-        const newId = $(bestCandidate.element).attr('id');
+    // --- New Check for Ambiguity ---
+    // Only proceed if we found a good score AND there is only ONE best candidate
+    if (topScore > 5 && topCandidates.length === 1) {
+        const bestCandidate = topCandidates[0];
+        const newId = $(bestCandidate).attr('id');
         if (newId) {
             const healedSelector = `#${newId}`;
-            console.log(`✨ Healed "${brokenSelector}" -> "${healedSelector}" with score: ${bestCandidate.score}`);
+            console.log(`✨ Healed "${brokenSelector}" -> "${healedSelector}" with score: ${topScore}`);
             return res.status(200).send({healedSelector: healedSelector});
         }
+    }
+
+    // If there was a tie, report the ambiguity
+    if (topCandidates.length > 1) {
+        console.log(`Heal failed: Ambiguous match. Found ${topCandidates.length} elements with score ${topScore} for "${brokenSelector}"`);
+        return res.status(409).send({message: `Healing failed due to ambiguity. Found ${topCandidates.length} matching elements.`}); // 409 Conflict
     }
 
     console.log(`Heal failed: No element matched fingerprint for "${brokenSelector}" (highest score: ${bestCandidate.score})`);

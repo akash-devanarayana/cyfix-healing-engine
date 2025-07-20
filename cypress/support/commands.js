@@ -34,20 +34,21 @@ Cypress.Commands.add('healGet', (selector) => {
                 return cy.request({
                     method: 'POST',
                     url: '/heal',
-                    body: {
-                        brokenSelector: selector,
-                        domSnapshot: doc.body.innerHTML
-                    },
+                    body: {brokenSelector: selector, domSnapshot: doc.body.innerHTML},
                     failOnStatusCode: false
                 }).then((response) => {
-                    cy.log('[healGet] Backend response:', JSON.stringify(response.body));
-                    const healedSelector = response.body.healedSelector;
-                    console.log(JSON.stringify(response));
-                    if (response.status === 200 && healedSelector) {
-                        cy.log(`[healGet] ✨ Backend provided a healed selector: "${healedSelector}"`);
-                        cy.log('[healGet] Retrying with the new selector...');
-                        return cy.get(healedSelector);
-                    } else {
+                    // ⭐ ADDED LOGIC TO HANDLE DIFFERENT STATUS CODES
+                    // Case 1: Successful Heal
+                    if (response.status === 200 && response.body.healedSelector) {
+                        cy.log(`[healGet] ✨ Backend provided a healed selector: "${response.body.healedSelector}"`);
+                        return cy.get(response.body.healedSelector);
+                    }
+                    // Case 2: Ambiguous Match
+                    else if (response.status === 409) {
+                        throw new Error(`[healGet] Healing failed due to ambiguity. ${response.body.message}`);
+                    }
+                    // Case 3: Any other failure
+                    else {
                         throw new Error(`[healGet] Healing failed for selector: "${selector}". Backend could not find a match.`);
                     }
                 });

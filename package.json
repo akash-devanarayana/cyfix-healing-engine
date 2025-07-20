@@ -1,6 +1,10 @@
 {
   "name": "cypress_project",
   "version": "1.0.0",
+  "scripts": {
+    "cy:run": "npx cypress run",
+    "cy:open": "npx cypress open"
+  },
   "devDependencies": {
     "cypress": "^14.5.2"
   }
