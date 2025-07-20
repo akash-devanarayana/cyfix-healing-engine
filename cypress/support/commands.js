@@ -1,8 +1,6 @@
 /**
- * A basic wrapper around cy.get() to serve as our starting point.
- * This will eventually contain our healing logic.
  *
- * @param {string} selector - The selector for the element to find.
+ * @param {string} selector
  */
 Cypress.Commands.add('healGet', (selector) => {
     cy.log(`[healGet] Attempting to find selector: ${selector}`);
@@ -37,7 +35,6 @@ Cypress.Commands.add('healGet', (selector) => {
                     body: {brokenSelector: selector, domSnapshot: doc.body.innerHTML},
                     failOnStatusCode: false
                 }).then((response) => {
-                    // ⭐ ADDED LOGIC TO HANDLE DIFFERENT STATUS CODES
                     // Case 1: Successful Heal
                     if (response.status === 200 && response.body.healedSelector) {
                         cy.log(`[healGet] ✨ Backend provided a healed selector: "${response.body.healedSelector}"`);
