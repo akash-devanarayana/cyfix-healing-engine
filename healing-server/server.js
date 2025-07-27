@@ -40,6 +40,7 @@ app.post("/heal", (req, res) => {
     const storedFingerprint = fingerprintStore.get(brokenSelector);
 
     if (!storedFingerprint) {
+        logger.error("No stored fingerprint found.");
         return res.status(404).send({message: "No fingerprint found."});
     }
 
@@ -108,6 +109,7 @@ app.post("/heal", (req, res) => {
     }
 
     if (topCandidates.length > 1) {
+        logger.warn("Healing failed. Ambiguity detected.");
         console.log(
             `Heal failed: Ambiguous match. Found ${topCandidates.length} elements with score ${topScore} for "${brokenSelector}"`
         );
@@ -119,6 +121,7 @@ app.post("/heal", (req, res) => {
             }); // 409 Conflict
     }
 
+    logger.error("Healing failed. No matching elements found.");
     console.log(
         `Heal failed: No element matched fingerprint for "${brokenSelector}" (highest score: ${bestCandidate.score})`
     );
