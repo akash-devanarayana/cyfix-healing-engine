@@ -1,6 +1,6 @@
 describe('Self-Healing System', () => {
     it('should find an element and learn its fingerprint', () => {
-        cy.visit('http://127.0.0.1:8080/healing-page.html');
+        cy.visit('http://127.0.0.1:8080/cypress/fixtures/healing-page.html');
         cy.healGet('#submit-button').should('be.visible');
     });
 
