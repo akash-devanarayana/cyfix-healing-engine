@@ -13,7 +13,6 @@ const HEAL_THRESHOLD = process.env.HEAL_THRESHOLD
     ? parseFloat(process.env.HEAL_THRESHOLD)
     : 80;
 
-
 app.use(express.json({limit: '50mb'}));
 
 // --- Endpoint to Learn a Fingerprint ---
@@ -28,8 +27,12 @@ app.post('/learn', (req, res) => {
 
     if (domSnapshot) {
         try {
+            // ensure snapshots directory exists
+            const snapshotDir = path.join(__dirname, 'snapshots');
+            fs.mkdirSync(snapshotDir, {recursive: true});
+
             const safeFilename = selector.replace(/[^a-zA-Z0-9]/g, '_') + '.html';
-            const snapshotPath = path.join(__dirname, 'snapshots', safeFilename);
+            const snapshotPath = path.join(snapshotDir, safeFilename);
             fs.writeFileSync(snapshotPath, domSnapshot);
             console.log(`Saved HTML snapshot to: ${safeFilename}`);
         } catch (err) {
@@ -47,7 +50,10 @@ app.post('/heal', (req, res) => {
     // Lookup stored fingerprint
     const storedFingerprint = fingerprintStore.get(brokenSelector);
     if (!storedFingerprint) {
-        return res.status(404).send({message: 'No fingerprint found.'});
+        return res.status(404).send({
+            message: 'No fingerprint found.',
+            confidence: 0
+        });
     }
 
     const $ = cheerio.load(domSnapshot);
@@ -164,14 +170,14 @@ app.post('/heal', (req, res) => {
         if (newId) {
             const healedSelector = `#${newId}`;
             console.log(`✨ Healed "${brokenSelector}" -> "${healedSelector}" with confidence: ${topScore.toFixed(1)}%`);
-            return res.status(200).send({healedSelector});
+            return res.status(200).send({healedSelector, confidence: topScore.toFixed(1)});
         }
 
         const ariaLabel = $(bestCandidate).attr('aria-label');
         if (ariaLabel) {
             const healedSelector = `[aria-label="${ariaLabel}"]`;
             console.log(`✨ Healed using aria-label: "${brokenSelector}" -> "${healedSelector}" with confidence: ${topScore.toFixed(1)}%`);
-            return res.status(200).send({healedSelector});
+            return res.status(200).send({healedSelector, confidence: topScore.toFixed(1)});
         }
 
         const className = $(bestCandidate).attr('class');
@@ -179,7 +185,7 @@ app.post('/heal', (req, res) => {
             const tagName = bestCandidate.tagName.toLowerCase();
             const healedSelector = `${tagName}.${className.split(' ').join('.')}`;
             console.log(`✨ Healed using class: "${brokenSelector}" -> "${healedSelector}" with confidence: ${topScore.toFixed(1)}%`);
-            return res.status(200).send({healedSelector});
+            return res.status(200).send({healedSelector, confidence: topScore.toFixed(1)});
         }
 
         // Last resort: nth-of-type
@@ -190,19 +196,24 @@ app.post('/heal', (req, res) => {
         if (index > 0) {
             const healedSelector = `${tagName}:nth-of-type(${index})`;
             console.log(`✨ Healed using nth-of-type: "${brokenSelector}" -> "${healedSelector}" with confidence: ${topScore.toFixed(1)}%`);
-            return res.status(200).send({healedSelector});
+            return res.status(200).send({healedSelector, confidence: topScore.toFixed(1)});
         }
     }
 
     if (topCandidates.length > 1) {
         console.log(`⚠️ Heal failed: Ambiguous match. Found ${topCandidates.length} elements at ~${topScore.toFixed(1)}% confidence for "${brokenSelector}"`);
-        return res.status(409).send({message: `Healing failed due to ambiguity. Found ${topCandidates.length} matching elements.`});
+        return res.status(409).send({
+            message: `Healing failed due to ambiguity. Found ${topCandidates.length} matching elements.`,
+            confidence: topScore.toFixed(1)
+        });
     }
 
     console.log(`❌ Heal failed: No strong match for "${brokenSelector}" (highest confidence: ${topScore.toFixed(1)}%)`);
-    return res.status(404).send({message: 'Healing failed. No element strongly matched fingerprint.'});
+    return res.status(404).send({
+        message: 'Healing failed. No element strongly matched fingerprint.',
+        confidence: topScore.toFixed(1)
+    });
 });
-
 
 app.listen(PORT, () => {
     console.log(`Healing server running at http://localhost:${PORT}`);
