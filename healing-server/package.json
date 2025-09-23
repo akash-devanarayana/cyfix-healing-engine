@@ -4,7 +4,8 @@
   "description": "Backend server for cypress healing",
   "main": "server.js",
   "scripts": {
-    "start-server": "node server.js"
+    "start-server": "node server.js",
+    "test": "jest"
   },
   "keywords": [],
   "author": "Akash Devanarayana",
@@ -13,5 +14,9 @@
   "dependencies": {
     "cheerio": "^1.1.0",
     "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
   }
 }
