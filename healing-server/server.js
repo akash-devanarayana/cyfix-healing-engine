@@ -101,10 +101,28 @@ app.post("/heal", (req, res) => {
     }
 
     const store = loadSnapshots(pageKey);
-    const fp = store[brokenId];
+
+    // 1. Try direct match
+    let fp = store[brokenId];
+    let foundKey = brokenId;
+
+    // 2. If not found, search in history arrays
+    if (!fp) {
+        for (const [id, data] of Object.entries(store)) {
+            if (data.history && data.history.includes(brokenId)) {
+                fp = data;
+                foundKey = id;
+                console.log(`[heal] Matched old id "${brokenId}" via history → current id "${id}"`);
+                break;
+            }
+        }
+    }
+
+    // 3. If still not found → fail
     if (!fp) {
         return res.status(404).send({message: "No fingerprint found.", confidence: 0});
     }
+
 
     const $ = cheerio.load(domSnapshot);
 

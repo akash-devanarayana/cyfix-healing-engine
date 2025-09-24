@@ -4,7 +4,7 @@ describe("Healing Multi Elements Page", () => {
         cy.visit("/healing-multi.html");
     });
 
-    it.only("should interact with buttons", () => {
+    it("should interact with buttons", () => {
         cy.healGet("#login-btn").should("contain.text", "Login");
         cy.healGet("#signup-btn").should("contain.text", "Sign Up");
         cy.healGet("#logout-btn").should("contain.text", "Logout");
