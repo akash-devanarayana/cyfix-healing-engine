@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Healing Test Page - Multiple Elements</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            background-color: #f9f9f9;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        button {
+            display: inline-block;
+            margin: 5px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            background-color: #007BFF;
+            border: none;
+            color: white;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        a {
+            display: inline-block;
+            margin: 5px;
+            color: #007BFF;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        input {
+            display: block;
+            margin: 8px 0;
+            padding: 6px;
+            width: 250px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        label {
+            display: block;
+            margin-top: 12px;
+            margin-bottom: 4px;
+            font-weight: bold;
+        }
+
+        div {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #fff;
+        }
+
+        #welcome-message {
+            border-left: 4px solid #28a745;
+        }
+
+        #status-message {
+            border-left: 4px solid #17a2b8;
+        }
+
+        #error-message {
+            border-left: 4px solid #dc3545;
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+<h1>Self-Healing Test Page</h1>
+
+<!-- Buttons -->
+<button id="login-btn">Login</button>
+<button id="signup-btn">Sign Up</button>
+<button id="logout-btn">Logout</button>
+
+<!-- Links -->
+<a href="/home" id="home-link">Home</a>
+<a href="/profile" id="profile-link">Profile</a>
+<a href="/settings" id="settings-link">Settings</a>
+
+<!-- Inputs with Labels -->
+<label for="username-input" id="username-label">Username</label>
+<input id="username-input" placeholder="Username" type="text">
+
+<label for="password-input" id="password-label">Password</label>
+<input id="password-input" placeholder="Password" type="password">
+
+<label for="email-input" id="email-label">Email</label>
+<input id="email-input" placeholder="Email" type="email">
+
+<!-- Messages -->
+<div id="welcome-message">Welcome to the app!</div>
+<div id="status-message">You are logged out.</div>
+<div id="error-message">An error occurred.</div>
+</body>
+</html>
