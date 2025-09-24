@@ -1,70 +1,70 @@
-/**
- *
- * @param {string} selector
- */
-Cypress.Commands.add("healGet", (selector) => {
-    cy.log(`[healGet] Attempting to find selector: ${selector}`);
+const HEAL_URL = Cypress.env("HEALING_SERVER_URL") || "http://localhost:3000";
 
-    return cy.get("body").then(($body) => {
-        if ($body.find(selector).length > 0) {
-            cy.log('[healGet] ✔️ Selector found! Learning its fingerprint...');
+// Turn URL into safe pageKey
+function getPageKey(urlStr) {
+    const u = new URL(urlStr);
+    return `${u.host}${u.pathname}`.replace(/[^\w\-]+/g, "_");
+}
 
-            return cy.get(selector).then($element => {
-                return cy.document().then(doc => {
-                    const fingerprint = {
-                        tagName: $element.prop('tagName'),
-                        innerText: $element.text().trim(),
-                        className: $element.attr('class'),
-                        placeholder: $element.attr('placeholder'),
-                        type: $element.attr('type'),
-                        'aria-label': $element.attr('aria-label')
-                    };
-                    Object.keys(fingerprint).forEach(key => fingerprint[key] === undefined && delete fingerprint[key]);
+// Save snapshot for element
+function learnSnapshot($el) {
+    const id = $el.attr("id");
+    if (!id) return;
 
-                    return cy.request('POST', '/learn', {
-                        selector,
-                        fingerprint,
-                        domSnapshot: doc.body.innerHTML
-                    })
-                        .then(() => {
-                            return $element;
-                        });
-                });
-            });
-        } else {
-            cy.log(
-                `[healGet] ❌ Selector "${selector}" not found. Contacting healing backend...`
-            );
-            return cy.document().then((doc) => {
-                return cy
-                    .request({
-                        method: "POST",
-                        url: "/heal",
-                        body: {brokenSelector: selector, domSnapshot: doc.body.innerHTML},
-                        failOnStatusCode: false,
-                    })
-                    .then((response) => {
-                        // Case 1: Successful Heal
-                        if (response.status === 200 && response.body.healedSelector) {
-                            cy.log(
-                                `[healGet] ✨ Backend provided a healed selector: "${response.body.healedSelector}"`
-                            );
-                            return cy.get(response.body.healedSelector);
-                        }
-                        // Case 2: Ambiguous Match
-                        else if (response.status === 409) {
-                            throw new Error(
-                                `[healGet] Healing failed due to ambiguity. ${response.body.message}`
-                            );
-                        }
-                        // Case 3: Any other failure
-                        else {
-                            throw new Error(
-                                `[healGet] Healing failed for selector: "${selector}". Backend could not find a match.`
-                            );
-                        }
-                    });
+    const payload = {
+        id,
+        tagName: $el.prop("tagName"),
+        className: $el.attr("class") || "",
+        innerText: $el.text().trim()
+    };
+
+    return cy.url().then((url) => {
+        return cy.request("POST", `${HEAL_URL}/learn`, {
+            pageKey: getPageKey(url),
+            ...payload
+        });
+    });
+}
+
+// New command: cy.healGet
+Cypress.Commands.add("healGet", (selector, options = {}) => {
+    return cy.get("body", {log: false}).then(($body) => {
+        // Case 1: element found normally
+        if ($body.find(selector).length) {
+            return cy.get(selector, options).then(($el) => {
+                return learnSnapshot($el).then(() => $el);
             });
         }
+
+        // Case 2: element not found -> attempt healing
+        const m = typeof selector === "string" ? selector.match(/^#([\w\-\.:]+)$/) : null;
+        if (!m) throw new Error(`[heal] Only ID selectors supported. Failed: "${selector}"`);
+        const brokenId = m[1];
+
+        return cy.document().then((doc) => {
+            const domSnapshot = doc.documentElement.outerHTML;
+            return cy.url().then((url) => {
+                return cy.request({
+                    method: "POST",
+                    url: `${HEAL_URL}/heal`,
+                    failOnStatusCode: false,
+                    body: {
+                        pageKey: getPageKey(url),
+                        brokenId,
+                        domSnapshot
+                    }
+                }).then((resp) => {
+                    if (resp.status === 200 && resp.body?.matched?.id) {
+                        const healedId = resp.body.matched.id;
+                        cy.log(`[heal] "${selector}" healed to "#${healedId}"`);
+                        return cy.get(`#${healedId}`, options);
+                    } else if (resp.status === 409) {
+                        throw new Error(`[heal] Ambiguous: ${resp.body?.message}`);
+                    } else {
+                        throw new Error(`[heal] Failed for "${selector}". Confidence: ${resp.body?.confidence ?? 0}%`);
+                    }
+                });
+            });
+        });
     });
 });
