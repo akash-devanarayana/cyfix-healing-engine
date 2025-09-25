@@ -190,6 +190,158 @@ app.post("/heal", (req, res) => {
     });
 });
 
+app.get("/snapshots", (req, res) => {
+    const files = fs.readdirSync(SNAPSHOTS_DIR).filter(f => f.endsWith(".json"));
+
+    let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Snapshot Viewer</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        ul { list-style: none; padding: 0; }
+        li { margin: 8px 0; }
+        a { text-decoration: none; color: #007BFF; }
+        a:hover { text-decoration: underline; }
+      </style>
+    </head>
+    <body>
+      <h1>Snapshot Viewer</h1>
+      <p>Available snapshot files:</p>
+      <ul>
+  `;
+
+    files.forEach(f => {
+        html += `<li><a href="/snapshots/${f}">${f}</a></li>`;
+    });
+
+    html += `
+      </ul>
+    </body>
+    </html>
+  `;
+
+    res.send(html);
+});
+
+// Serve snapshot file as pretty HTML table
+app.get("/snapshots/:file", (req, res) => {
+    const filePath = path.join(SNAPSHOTS_DIR, req.params.file);
+    if (!fs.existsSync(filePath)) {
+        return res.status(404).send("Snapshot not found");
+    }
+
+    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+
+    let rows = "";
+    Object.values(data).forEach(el => {
+        rows += `
+      <tr>
+        <td>${el.id}</td>
+        <td>${el.tagName}</td>
+        <td>${el.className || ""}</td>
+        <td>${el.innerText || ""}</td>
+        <td>${el.lastSeen || ""}</td>
+        <td class="history">${(el.history || []).join(", ")}</td>
+      </tr>
+    `;
+    });
+
+    const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Snapshot - ${req.params.file}</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
+        h1 { color: #333; margin-bottom: 20px; }
+        table { border-collapse: collapse; width: 100%; background: #fff; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+        th { background: #007BFF; color: white; }
+        tr:nth-child(even) { background: #f2f2f2; }
+        .history { font-size: 0.9em; color: #555; }
+        a { color: #007BFF; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        #searchBox { padding: 8px; width: 300px; font-size: 14px; margin-bottom: 10px; }
+        #toggleBtn { margin: 10px 0; padding: 6px 12px; background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #toggleBtn:hover { background: #0056b3; }
+        pre { background: #eee; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        #jsonView { display: none; }
+      </style>
+    </head>
+    <body>
+      <h1>Snapshot: ${req.params.file}</h1>
+      <a href="/snapshots">&larr; Back to all snapshots</a>
+
+      <div>
+        <label for="searchBox"><strong>Search:</strong></label>
+        <input type="text" id="searchBox" placeholder="Filter by id, tag, class, or text...">
+        <button id="toggleBtn">Switch to JSON View</button>
+      </div>
+
+      <!-- Pretty Table View -->
+      <div id="tableView">
+        <table id="snapshotTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Tag</th>
+              <th>Class</th>
+              <th>Inner Text</th>
+              <th>Last Seen</th>
+              <th>History</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Raw JSON View -->
+      <div id="jsonView">
+        <pre>${JSON.stringify(data, null, 2)}</pre>
+      </div>
+
+      <script>
+        const searchBox = document.getElementById('searchBox');
+        const toggleBtn = document.getElementById('toggleBtn');
+        const tableView = document.getElementById('tableView');
+        const jsonView = document.getElementById('jsonView');
+
+        // Search filter
+        searchBox.addEventListener('keyup', function() {
+          const filter = searchBox.value.toLowerCase();
+          const rows = document.querySelectorAll('#snapshotTable tbody tr');
+          rows.forEach(row => {
+            const text = row.innerText.toLowerCase();
+            row.style.display = text.includes(filter) ? '' : 'none';
+          });
+        });
+
+        // Toggle views
+        toggleBtn.addEventListener('click', function() {
+          if (tableView.style.display === 'none') {
+            tableView.style.display = '';
+            jsonView.style.display = 'none';
+            toggleBtn.textContent = 'Switch to JSON View';
+          } else {
+            tableView.style.display = 'none';
+            jsonView.style.display = '';
+            toggleBtn.textContent = 'Switch to Table View';
+          }
+        });
+      </script>
+    </body>
+    </html>
+  `;
+
+    res.send(html);
+});
+
+
 app.listen(PORT, () => {
     console.log(`Healing server running at http://localhost:${PORT}`);
 });
