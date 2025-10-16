@@ -26,7 +26,6 @@ function learnSnapshot($el) {
     });
 }
 
-// New command: cy.healGet
 Cypress.Commands.add("healGet", (selector, options = {}) => {
     return cy.get("body", {log: false}).then(($body) => {
         // Case 1: element found normally
