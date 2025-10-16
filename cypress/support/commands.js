@@ -36,7 +36,7 @@ Cypress.Commands.add("healGet", (selector, options = {}) => {
                     cy.log(`[heal] Learned snapshot for #${id}`);
                     learnSnapshot($el);
                 }
-                return $el;
+                return cy.wrap($el);
             });
         }
 
