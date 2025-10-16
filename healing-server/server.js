@@ -195,7 +195,7 @@ app.get("/snapshots", (req, res) => {
 
     let html = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <title>Snapshot Viewer</title>
       <style>
