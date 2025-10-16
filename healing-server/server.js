@@ -66,7 +66,7 @@ function scoreCandidate(fp, cand) {
     fp.tagName.toUpperCase() === cand.tagName.toUpperCase() ? 50 : 0;
     const classScore = 30 * jaccardSetSimilarity(fp.className, cand.className);
     const textScore = 20 * textSimilarity(fp.innerText, cand.innerText);
-    return Math.round((tagScore + classScore + textScore) * 10) / 10; // one decimal
+    return Math.round((tagScore + classScore + textScore) * 10) / 10;
 }
 
 // ========== API ==========
@@ -74,7 +74,6 @@ app.post("/learn", (req, res) => {
     try {
         let {pageKey, id, tagName, className = "", innerText = ""} = req.body || {};
 
-        // Minimal normalization (keep case, just trim and strip leading '#')
         const normId = s => String(s || "").replace(/^#/, "").trim();
         pageKey = normId(pageKey);
         id = normId(id);
@@ -85,10 +84,9 @@ app.post("/learn", (req, res) => {
         }
 
         const now = new Date().toISOString();
-        const store = loadSnapshots(pageKey); // your helper
+        const store = loadSnapshots(pageKey);
 
-        // --- Build index: historyId -> set of current keys that contain it ---
-        const histIndex = new Map(); // histId -> Set(keys)
+        const histIndex = new Map();
         const getSet = k => (histIndex.has(k) ? histIndex.get(k) : histIndex.set(k, new Set()).get(k));
 
         for (const [k, rec] of Object.entries(store)) {
@@ -96,11 +94,9 @@ app.post("/learn", (req, res) => {
             for (const h of hist) getSet(h).add(k);
         }
 
-        // --- Find the full "family" of current keys related to `id` ---
         const familyKeys = new Set();
         const queue = [];
 
-        // Seed 1: any current key that lists the incoming id in its history
         for (const k of (histIndex.get(id) || [])) {
             if (!familyKeys.has(k)) {
                 familyKeys.add(k);
@@ -108,13 +104,11 @@ app.post("/learn", (req, res) => {
             }
         }
 
-        // Seed 2: if the incoming id is itself a current key, include it
         if (store[id]) {
             familyKeys.add(id);
             queue.push(id);
         }
 
-        // BFS over current keys via shared history ids
         while (queue.length) {
             const curKey = queue.shift();
             const rec = store[curKey];
@@ -132,28 +126,21 @@ app.post("/learn", (req, res) => {
             }
         }
 
-        // If nothing connected was found and `id` isn’t a current key yet,
-        // this is a brand-new element; family will just be empty => create fresh.
-        // If you *do* have multiple records like your screenshot, both keys
-        // will be in family via the shared history "login-btn".
-
-        // --- Build merged history from the family ---
         const mergedHistory = new Set();
         for (const k of familyKeys) {
             const rec = store[k] || {};
             const hist = Array.isArray(rec.history) ? rec.history.map(normId) : [];
             for (const h of hist) mergedHistory.add(h);
-            // also remember each current key name as a historical alias
             mergedHistory.add(normId(k));
         }
-        // plus: if the incoming id existed before, preserve its previous history
+
         if (store[id]?.history) {
             for (const h of store[id].history.map(normId)) mergedHistory.add(h);
         }
-        // never keep self in history
+
         mergedHistory.delete(id);
 
-        // --- Write the single, canonical record under `id` ---
+
         store[id] = {
             id,
             tagName,
@@ -163,12 +150,12 @@ app.post("/learn", (req, res) => {
             history: Array.from(mergedHistory),
         };
 
-        // --- Remove all other current keys in the family (avoid duplicates) ---
+
         for (const k of familyKeys) {
             if (k !== id) delete store[k];
         }
 
-        // If nobody was in family and `id` was new, we just created a clean new record.
+
         saveSnapshots(pageKey, store);
         return res.send({
             message: familyKeys.size ? "Snapshot stored (merged family)" : "Snapshot stored",
