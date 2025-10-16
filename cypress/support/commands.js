@@ -1,12 +1,10 @@
 const HEAL_URL = Cypress.env("HEALING_SERVER_URL") || "http://localhost:3000";
 
-// Turn URL into safe pageKey
 function getPageKey(urlStr) {
     const u = new URL(urlStr);
     return `${u.host}${u.pathname}`.replace(/[^\w\-]+/g, "_");
 }
 
-// Save snapshot for element
 function learnSnapshot($el) {
     const id = $el.attr("id");
     if (!id) return;
@@ -63,7 +61,9 @@ Cypress.Commands.add("healGet", (selector, options = {}) => {
                     if (resp.status === 200 && resp.body?.matched?.id) {
                         const healedId = resp.body.matched.id;
                         cy.log(`[heal] SUCCESS: "${selector}" healed to "#${healedId}" (confidence ${resp.body.confidence}%)`);
-                        return cy.get(`#${healedId}`, options);
+                        return cy.get(`#${healedId}`, options).then(($el) => {
+                            return learnSnapshot($el).then(() => $el);
+                        });
                     } else if (resp.status === 409) {
                         cy.log(`[heal] AMBIGUOUS: ${resp.body?.message}`);
                         throw new Error(`[heal] Ambiguous: ${resp.body?.message}`);
