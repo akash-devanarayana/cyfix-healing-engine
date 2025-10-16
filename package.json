@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "cy:run": "npx cypress run",
-    "cy:open": "npx cypress open"
+    "cy:open": "npx cypress open",
+    "http-server": "http-server"
   },
   "devDependencies": {
     "cypress": "^15.0.0"
