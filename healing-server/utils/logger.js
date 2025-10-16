@@ -34,7 +34,7 @@ const DEFAULT_CONFIG = {
     level: LOG_LEVELS.INFO,
     includeTimestamp: true,
     includeLevel: true,
-    timestampFormat: 'ISO', // 'ISO' or 'LOCALE'
+    timestampFormat: 'ISO',
     colorOutput: true
 };
 

@@ -1,12 +1,10 @@
 const HEAL_URL = Cypress.env("HEALING_SERVER_URL") || "http://localhost:3000";
 
-// Turn URL into safe pageKey
 function getPageKey(urlStr) {
     const u = new URL(urlStr);
     return `${u.host}${u.pathname}`.replace(/[^\w\-]+/g, "_");
 }
 
-// Save snapshot for element
 function learnSnapshot($el) {
     const id = $el.attr("id");
     if (!id) return;
@@ -26,20 +24,26 @@ function learnSnapshot($el) {
     });
 }
 
-// New command: cy.healGet
 Cypress.Commands.add("healGet", (selector, options = {}) => {
     return cy.get("body", {log: false}).then(($body) => {
         // Case 1: element found normally
         if ($body.find(selector).length) {
             return cy.get(selector, options).then(($el) => {
-                return learnSnapshot($el).then(() => $el);
+                const id = $el.attr("id");
+                if (id) {
+                    cy.log(`[heal] Learned snapshot for #${id}`);
+                    learnSnapshot($el);
+                }
+                return cy.wrap($el);
             });
         }
 
-        // Case 2: element not found -> attempt healing
+        // Case 2: element not found → attempt healing
         const m = typeof selector === "string" ? selector.match(/^#([\w\-\.:]+)$/) : null;
         if (!m) throw new Error(`[heal] Only ID selectors supported. Failed: "${selector}"`);
         const brokenId = m[1];
+
+        cy.log(`[heal] Element "${selector}" not found. Trying healing...`);
 
         return cy.document().then((doc) => {
             const domSnapshot = doc.documentElement.outerHTML;
@@ -56,11 +60,15 @@ Cypress.Commands.add("healGet", (selector, options = {}) => {
                 }).then((resp) => {
                     if (resp.status === 200 && resp.body?.matched?.id) {
                         const healedId = resp.body.matched.id;
-                        cy.log(`[heal] "${selector}" healed to "#${healedId}"`);
-                        return cy.get(`#${healedId}`, options);
+                        cy.log(`[heal] SUCCESS: "${selector}" healed to "#${healedId}" (confidence ${resp.body.confidence}%)`);
+                        return cy.get(`#${healedId}`, options).then(($el) => {
+                            return learnSnapshot($el).then(() => $el);
+                        });
                     } else if (resp.status === 409) {
+                        cy.log(`[heal] AMBIGUOUS: ${resp.body?.message}`);
                         throw new Error(`[heal] Ambiguous: ${resp.body?.message}`);
                     } else {
+                        cy.log(`[heal] FAILED: Could not heal "${selector}". Confidence: ${resp.body?.confidence ?? 0}%`);
                         throw new Error(`[heal] Failed for "${selector}". Confidence: ${resp.body?.confidence ?? 0}%`);
                     }
                 });
@@ -68,3 +76,4 @@ Cypress.Commands.add("healGet", (selector, options = {}) => {
         });
     });
 });
+
