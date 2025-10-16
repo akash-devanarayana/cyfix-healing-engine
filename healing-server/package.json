@@ -4,7 +4,7 @@
   "description": "Backend server for cypress healing",
   "main": "server.js",
   "scripts": {
-    "start-server": "node server.js",
+    "start-server": "node server.js"
   },
   "keywords": [],
   "author": "Akash Devanarayana",
