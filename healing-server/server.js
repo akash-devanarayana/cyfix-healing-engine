@@ -71,29 +71,117 @@ function scoreCandidate(fp, cand) {
 
 // ========== API ==========
 
-// Learn / upsert snapshot by *element id* for a page
-// Body: { pageKey, id, tagName, className, innerText }
 app.post("/learn", (req, res) => {
-    const {pageKey, id, tagName, className = "", innerText = ""} = req.body || {};
-    if (!pageKey || !id || !tagName) {
-        return res.status(400).send({message: "pageKey, id, tagName required"});
-    }
+    try {
+        let {pageKey, id, tagName, className = "", innerText = ""} = req.body || {};
 
-    const store = loadSnapshots(pageKey);
-    store[id] = {
-        id,
-        tagName,
-        className,
-        innerText,
-        lastSeen: nowISO(),
-        history: store[id]?.history || []
-    };
-    saveSnapshots(pageKey, store);
-    return res.send({message: "Snapshot stored", stored: store[id]});
+        // Minimal normalization (keep case, just trim and strip leading '#')
+        const normId = s => String(s || "").replace(/^#/, "").trim();
+        pageKey = normId(pageKey);
+        id = normId(id);
+        tagName = String(tagName || "").trim();
+
+        if (!pageKey || !id || !tagName) {
+            return res.status(400).send({message: "pageKey, id, tagName are required"});
+        }
+
+        const now = new Date().toISOString();
+        const store = loadSnapshots(pageKey); // your helper
+
+        // --- Build index: historyId -> set of current keys that contain it ---
+        const histIndex = new Map(); // histId -> Set(keys)
+        const getSet = k => (histIndex.has(k) ? histIndex.get(k) : histIndex.set(k, new Set()).get(k));
+
+        for (const [k, rec] of Object.entries(store)) {
+            const hist = Array.isArray(rec.history) ? rec.history.map(normId) : [];
+            for (const h of hist) getSet(h).add(k);
+        }
+
+        // --- Find the full "family" of current keys related to `id` ---
+        const familyKeys = new Set();
+        const queue = [];
+
+        // Seed 1: any current key that lists the incoming id in its history
+        for (const k of (histIndex.get(id) || [])) {
+            if (!familyKeys.has(k)) {
+                familyKeys.add(k);
+                queue.push(k);
+            }
+        }
+
+        // Seed 2: if the incoming id is itself a current key, include it
+        if (store[id]) {
+            familyKeys.add(id);
+            queue.push(id);
+        }
+
+        // BFS over current keys via shared history ids
+        while (queue.length) {
+            const curKey = queue.shift();
+            const rec = store[curKey];
+            const curHist = Array.isArray(rec?.history) ? rec.history.map(normId) : [];
+
+            for (const h of curHist) {
+                const neighbors = histIndex.get(h);
+                if (!neighbors) continue;
+                for (const nKey of neighbors) {
+                    if (!familyKeys.has(nKey)) {
+                        familyKeys.add(nKey);
+                        queue.push(nKey);
+                    }
+                }
+            }
+        }
+
+        // If nothing connected was found and `id` isn’t a current key yet,
+        // this is a brand-new element; family will just be empty => create fresh.
+        // If you *do* have multiple records like your screenshot, both keys
+        // will be in family via the shared history "login-btn".
+
+        // --- Build merged history from the family ---
+        const mergedHistory = new Set();
+        for (const k of familyKeys) {
+            const rec = store[k] || {};
+            const hist = Array.isArray(rec.history) ? rec.history.map(normId) : [];
+            for (const h of hist) mergedHistory.add(h);
+            // also remember each current key name as a historical alias
+            mergedHistory.add(normId(k));
+        }
+        // plus: if the incoming id existed before, preserve its previous history
+        if (store[id]?.history) {
+            for (const h of store[id].history.map(normId)) mergedHistory.add(h);
+        }
+        // never keep self in history
+        mergedHistory.delete(id);
+
+        // --- Write the single, canonical record under `id` ---
+        store[id] = {
+            id,
+            tagName,
+            className,
+            innerText,
+            lastSeen: now,
+            history: Array.from(mergedHistory),
+        };
+
+        // --- Remove all other current keys in the family (avoid duplicates) ---
+        for (const k of familyKeys) {
+            if (k !== id) delete store[k];
+        }
+
+        // If nobody was in family and `id` was new, we just created a clean new record.
+        saveSnapshots(pageKey, store);
+        return res.send({
+            message: familyKeys.size ? "Snapshot stored (merged family)" : "Snapshot stored",
+            stored: store[id]
+        });
+    } catch (err) {
+        console.error("[/learn] error:", err);
+        return res.status(500).send({message: "Internal error in /learn"});
+    }
 });
 
-// Heal using stored fingerprint under *brokenId*
-// Body: { pageKey, brokenId, domSnapshot }
+
 app.post("/heal", (req, res) => {
     const {pageKey, brokenId, domSnapshot} = req.body || {};
     if (!pageKey || !brokenId || !domSnapshot) {
