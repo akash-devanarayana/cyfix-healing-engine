@@ -20,7 +20,6 @@ const SNAPSHOTS_DIR = path.join(__dirname, "snapshots");
 if (!fs.existsSync(SNAPSHOTS_DIR)) fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true });
 
 function fileKeyFromPageKey(pageKey) {
-    // pageKey e.g. "localhost_/healing-page.html"
     return pageKey.replace(/[^\w\-]+/g, "_");
 }
 
@@ -67,7 +66,6 @@ function textSimilarity(a = "", b = "") {
 }
 
 function scoreCandidate(fp, cand) {
-    // weights sum to 100
     const tagScore = fp.tagName && cand.tagName &&
     fp.tagName.toUpperCase() === cand.tagName.toUpperCase() ? 50 : 0;
     const classScore = 30 * jaccardSetSimilarity(fp.className, cand.className);
