@@ -2,6 +2,7 @@ const express = require("express");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
+const {getLogger} = require("./utils/logger");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -225,6 +226,7 @@ app.post("/heal", (req, res) => {
 
     const second = candidates[1];
     if (second && second.score === topScore && second.cand.id !== best.cand.id) {
+        getLogger().error("Ambiguous healing scenario. Healing failed.");
         return res.status(409).send({
             message: `Ambiguous healing (top ties at ${topScore}%).`,
             confidence: topScore
