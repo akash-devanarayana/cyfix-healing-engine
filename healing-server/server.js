@@ -70,7 +70,6 @@ function scoreCandidate(fp, cand) {
 }
 
 // ========== API ==========
-
 app.post("/learn", (req, res) => {
     try {
         let {pageKey, id, tagName, className = "", innerText = ""} = req.body || {};
@@ -180,7 +179,6 @@ app.post("/learn", (req, res) => {
         return res.status(500).send({message: "Internal error in /learn"});
     }
 });
-
 
 app.post("/heal", (req, res) => {
     const {pageKey, brokenId, domSnapshot} = req.body || {};
