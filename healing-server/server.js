@@ -2,7 +2,10 @@ const express = require("express");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
-const {getLogger} = require("./utils/logger");
+const { getLogger } = require("./utils/logger.js");
+
+// ---- Logger Initialization ----
+const logger = getLogger({ level: 'info' });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,10 +14,10 @@ const HEAL_THRESHOLD = process.env.HEAL_THRESHOLD
     : 80; // %
 
 // ---- Utils ----
-app.use(express.json({limit: "50mb"}));
+app.use(express.json({ limit: "50mb" }));
 
 const SNAPSHOTS_DIR = path.join(__dirname, "snapshots");
-if (!fs.existsSync(SNAPSHOTS_DIR)) fs.mkdirSync(SNAPSHOTS_DIR, {recursive: true});
+if (!fs.existsSync(SNAPSHOTS_DIR)) fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true });
 
 function fileKeyFromPageKey(pageKey) {
     // pageKey e.g. "localhost_/healing-page.html"
@@ -26,16 +29,18 @@ function loadSnapshots(pageKey) {
     if (!fs.existsSync(file)) return {};
     try {
         return JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch {
+    } catch (err) {
+        logger.error("Failed to parse snapshot file", { file, error: err.message });
         return {};
     }
 }
 
 function saveSnapshots(pageKey, data) {
     const snapshotDir = path.join(__dirname, 'snapshots');
-    fs.mkdirSync(snapshotDir, {recursive: true});
+    fs.mkdirSync(snapshotDir, { recursive: true });
     const file = path.join(SNAPSHOTS_DIR, fileKeyFromPageKey(pageKey) + ".json");
     fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
+    logger.debug("Snapshots saved successfully", { pageKey });
 }
 
 function nowISO() {
@@ -73,7 +78,7 @@ function scoreCandidate(fp, cand) {
 // ========== API ==========
 app.post("/learn", (req, res) => {
     try {
-        let {pageKey, id, tagName, className = "", innerText = ""} = req.body || {};
+        let { pageKey, id, tagName, className = "", innerText = "" } = req.body || {};
 
         const normId = s => String(s || "").replace(/^#/, "").trim();
         pageKey = normId(pageKey);
@@ -81,40 +86,36 @@ app.post("/learn", (req, res) => {
         tagName = String(tagName || "").trim();
 
         if (!pageKey || !id || !tagName) {
-            return res.status(400).send({message: "pageKey, id, tagName are required"});
+            logger.warn("[/learn] Bad request: Missing required parameters", { body: req.body });
+            return res.status(400).send({ message: "pageKey, id, tagName are required" });
         }
 
         const now = new Date().toISOString();
         const store = loadSnapshots(pageKey);
 
+        // --- Logic for finding and merging element families ---
         const histIndex = new Map();
         const getSet = k => (histIndex.has(k) ? histIndex.get(k) : histIndex.set(k, new Set()).get(k));
-
         for (const [k, rec] of Object.entries(store)) {
             const hist = Array.isArray(rec.history) ? rec.history.map(normId) : [];
             for (const h of hist) getSet(h).add(k);
         }
-
         const familyKeys = new Set();
         const queue = [];
-
         for (const k of (histIndex.get(id) || [])) {
             if (!familyKeys.has(k)) {
                 familyKeys.add(k);
                 queue.push(k);
             }
         }
-
         if (store[id]) {
             familyKeys.add(id);
             queue.push(id);
         }
-
         while (queue.length) {
             const curKey = queue.shift();
             const rec = store[curKey];
             const curHist = Array.isArray(rec?.history) ? rec.history.map(normId) : [];
-
             for (const h of curHist) {
                 const neighbors = histIndex.get(h);
                 if (!neighbors) continue;
@@ -126,7 +127,6 @@ app.post("/learn", (req, res) => {
                 }
             }
         }
-
         const mergedHistory = new Set();
         for (const k of familyKeys) {
             const rec = store[k] || {};
@@ -134,13 +134,11 @@ app.post("/learn", (req, res) => {
             for (const h of hist) mergedHistory.add(h);
             mergedHistory.add(normId(k));
         }
-
         if (store[id]?.history) {
             for (const h of store[id].history.map(normId)) mergedHistory.add(h);
         }
-
         mergedHistory.delete(id);
-
+        // --- End of merging logic ---
 
         store[id] = {
             id,
@@ -151,27 +149,28 @@ app.post("/learn", (req, res) => {
             history: Array.from(mergedHistory),
         };
 
-
         for (const k of familyKeys) {
             if (k !== id) delete store[k];
         }
 
-
         saveSnapshots(pageKey, store);
-        return res.send({
-            message: familyKeys.size ? "Snapshot stored (merged family)" : "Snapshot stored",
-            stored: store[id]
-        });
+
+        const message = familyKeys.size ? "Snapshot stored (merged family)" : "Snapshot stored";
+        logger.info(`[/learn] ${message}`, { pageKey, id, mergedCount: familyKeys.size });
+
+        return res.send({ message, stored: store[id] });
+
     } catch (err) {
-        console.error("[/learn] error:", err);
-        return res.status(500).send({message: "Internal error in /learn"});
+        logger.error("[/learn] Internal server error", { error: err.stack });
+        return res.status(500).send({ message: "Internal error in /learn" });
     }
 });
 
 app.post("/heal", (req, res) => {
-    const {pageKey, brokenId, domSnapshot} = req.body || {};
+    const { pageKey, brokenId, domSnapshot } = req.body || {};
     if (!pageKey || !brokenId || !domSnapshot) {
-        return res.status(400).send({message: "pageKey, brokenId, domSnapshot required"});
+        logger.warn("[/heal] Bad request: Missing required parameters", { body: req.body });
+        return res.status(400).send({ message: "pageKey, brokenId, domSnapshot required" });
     }
 
     const store = loadSnapshots(pageKey);
@@ -186,20 +185,19 @@ app.post("/heal", (req, res) => {
             if (data.history && data.history.includes(brokenId)) {
                 fp = data;
                 foundKey = id;
-                console.log(`[heal] Matched old id "${brokenId}" via history → current id "${id}"`);
+                logger.info(`[/heal] Matched old id via history`, { pageKey, brokenId, currentId: id });
                 break;
             }
         }
     }
 
-    // 3. If still not found → fail
+    // 3. If still not found -> fail
     if (!fp) {
-        return res.status(404).send({message: "No fingerprint found.", confidence: 0});
+        logger.warn("[/heal] Fingerprint not found", { pageKey, brokenId });
+        return res.status(404).send({ message: "No fingerprint found.", confidence: 0 });
     }
 
-
     const $ = cheerio.load(domSnapshot);
-
     const candidates = [];
     $("*").each((_, el) => {
         const $el = $(el);
@@ -213,11 +211,12 @@ app.post("/heal", (req, res) => {
             innerText: $el.text().trim()
         };
         const score = scoreCandidate(fp, cand);
-        candidates.push({cand, score});
+        candidates.push({ cand, score });
     });
 
     if (!candidates.length) {
-        return res.status(404).send({message: "No id-bearing elements in DOM.", confidence: 0});
+        logger.warn("[/heal] No id-bearing elements found in DOM snapshot", { pageKey });
+        return res.status(404).send({ message: "No id-bearing elements in DOM.", confidence: 0 });
     }
 
     candidates.sort((a, b) => b.score - a.score);
@@ -226,11 +225,9 @@ app.post("/heal", (req, res) => {
 
     const second = candidates[1];
     if (second && second.score === topScore && second.cand.id !== best.cand.id) {
-        getLogger().error("Ambiguous healing scenario. Healing failed.");
-        return res.status(409).send({
-            message: `Ambiguous healing (top ties at ${topScore}%).`,
-            confidence: topScore
-        });
+        const message = `Ambiguous healing (top ties at ${topScore}%).`;
+        logger.warn(`[/heal] ${message}`, { pageKey, brokenId, topScore });
+        return res.status(409).send({ message, confidence: topScore });
     }
 
     if (topScore >= HEAL_THRESHOLD) {
@@ -245,10 +242,11 @@ app.post("/heal", (req, res) => {
                 history: [...(prev?.history || []), brokenId]
             };
         } else {
-            store[found.id] = {...found, lastSeen: nowISO(), history: store[found.id]?.history || []};
+            store[found.id] = { ...found, lastSeen: nowISO(), history: store[found.id]?.history || [] };
         }
         saveSnapshots(pageKey, store);
 
+        logger.info("[/heal] Successfully healed element", { pageKey, brokenId, healedId: found.id, confidence: topScore });
         return res.send({
             message: "Healed",
             confidence: topScore,
@@ -256,6 +254,7 @@ app.post("/heal", (req, res) => {
         });
     }
 
+    logger.warn("[/heal] Healing failed due to low confidence", { pageKey, brokenId, topScore });
     return res.status(404).send({
         message: "Healing failed. No element strongly matched fingerprint.",
         confidence: topScore
@@ -263,6 +262,7 @@ app.post("/heal", (req, res) => {
 });
 
 app.get("/snapshots", (req, res) => {
+    logger.info("[/snapshots] Viewing snapshot list");
     const files = fs.readdirSync(SNAPSHOTS_DIR).filter(f => f.endsWith(".json"));
 
     let html = `
@@ -299,8 +299,12 @@ app.get("/snapshots", (req, res) => {
 });
 
 app.get("/snapshots/:file", (req, res) => {
-    const filePath = path.join(SNAPSHOTS_DIR, req.params.file);
+    const file = req.params.file;
+    logger.info("[/snapshots/:file] Viewing snapshot file", { file });
+    const filePath = path.join(SNAPSHOTS_DIR, file);
+
     if (!fs.existsSync(filePath)) {
+        logger.warn("[/snapshots/:file] Snapshot file not found", { file });
         return res.status(404).send("Snapshot not found");
     }
 
@@ -324,7 +328,7 @@ app.get("/snapshots/:file", (req, res) => {
     <!DOCTYPE html>
     <html lang="en">
     <head>
-      <title>Snapshot - ${req.params.file}</title>
+      <title>Snapshot - ${file}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; background: #f9f9f9; }
         h1 { color: #333; margin-bottom: 20px; }
@@ -341,7 +345,7 @@ app.get("/snapshots/:file", (req, res) => {
       </style>
     </head>
     <body>
-      <h1>Snapshot: ${req.params.file}</h1>
+      <h1>Snapshot: ${file}</h1>
       <a href="/snapshots">&larr; Back to all snapshots</a>
 
       <div>
@@ -386,7 +390,6 @@ app.get("/snapshots/:file", (req, res) => {
     res.send(html);
 });
 
-
 app.listen(PORT, () => {
-    console.log(`Healing server running at http://localhost:${PORT}`);
+    logger.info(`Healing server running at http://localhost:${PORT}`);
 });
