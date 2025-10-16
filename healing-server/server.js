@@ -251,7 +251,7 @@ app.get("/snapshots/:file", (req, res) => {
 
     const html = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
     <head>
       <title>Snapshot - ${req.params.file}</title>
       <style>
@@ -265,8 +265,6 @@ app.get("/snapshots/:file", (req, res) => {
         a { color: #007BFF; text-decoration: none; }
         a:hover { text-decoration: underline; }
         #searchBox { padding: 8px; width: 300px; font-size: 14px; margin-bottom: 10px; }
-        #toggleBtn { margin: 10px 0; padding: 6px 12px; background: #007BFF; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        #toggleBtn:hover { background: #0056b3; }
         pre { background: #eee; padding: 15px; border-radius: 5px; overflow-x: auto; }
         #jsonView { display: none; }
       </style>
@@ -277,8 +275,7 @@ app.get("/snapshots/:file", (req, res) => {
 
       <div>
         <label for="searchBox"><strong>Search:</strong></label>
-        <input type="text" id="searchBox" placeholder="Filter by id, tag, class, or text...">
-        <button id="toggleBtn">Switch to JSON View</button>
+        <input id="searchBox" placeholder="Filter by id, tag, class, or text..." type="text">
       </div>
 
       <!-- Pretty Table View -->
@@ -300,16 +297,8 @@ app.get("/snapshots/:file", (req, res) => {
         </table>
       </div>
 
-      <!-- Raw JSON View -->
-      <div id="jsonView">
-        <pre>${JSON.stringify(data, null, 2)}</pre>
-      </div>
-
       <script>
         const searchBox = document.getElementById('searchBox');
-        const toggleBtn = document.getElementById('toggleBtn');
-        const tableView = document.getElementById('tableView');
-        const jsonView = document.getElementById('jsonView');
 
         // Search filter
         searchBox.addEventListener('keyup', function() {
@@ -319,19 +308,6 @@ app.get("/snapshots/:file", (req, res) => {
             const text = row.innerText.toLowerCase();
             row.style.display = text.includes(filter) ? '' : 'none';
           });
-        });
-
-        // Toggle views
-        toggleBtn.addEventListener('click', function() {
-          if (tableView.style.display === 'none') {
-            tableView.style.display = '';
-            jsonView.style.display = 'none';
-            toggleBtn.textContent = 'Switch to JSON View';
-          } else {
-            tableView.style.display = 'none';
-            jsonView.style.display = '';
-            toggleBtn.textContent = 'Switch to Table View';
-          }
         });
       </script>
     </body>
