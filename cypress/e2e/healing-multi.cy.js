@@ -1,6 +1,5 @@
 describe("Healing Multi Elements Page", () => {
     beforeEach(() => {
-        // adjust path depending on how you're serving the HTML
         cy.visit("/healing-multi.html");
     });
 
