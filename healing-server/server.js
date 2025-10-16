@@ -126,7 +126,6 @@ app.post("/heal", (req, res) => {
 
     const $ = cheerio.load(domSnapshot);
 
-    // Consider only elements that have an id (since snapshot keys are ids)
     const candidates = [];
     $("*").each((_, el) => {
         const $el = $(el);
@@ -135,7 +134,7 @@ app.post("/heal", (req, res) => {
 
         const cand = {
             id,
-            tagName: el.tagName || $el.prop("tagName") || "", // cheerio lowercases tagName
+            tagName: el.tagName || $el.prop("tagName") || "",
             className: $el.attr("class") || "",
             innerText: $el.text().trim()
         };
@@ -151,7 +150,6 @@ app.post("/heal", (req, res) => {
     const best = candidates[0];
     const topScore = best.score;
 
-    // If there is a tie on top score with a different id, call it ambiguous
     const second = candidates[1];
     if (second && second.score === topScore && second.cand.id !== best.cand.id) {
         return res.status(409).send({
@@ -163,7 +161,6 @@ app.post("/heal", (req, res) => {
     if (topScore >= HEAL_THRESHOLD) {
         const found = best.cand;
 
-        // replace snapshot: move from old id -> new id if needed
         if (found.id !== brokenId) {
             const prev = store[brokenId];
             delete store[brokenId];
@@ -226,7 +223,6 @@ app.get("/snapshots", (req, res) => {
     res.send(html);
 });
 
-// Serve snapshot file as pretty HTML table
 app.get("/snapshots/:file", (req, res) => {
     const filePath = path.join(SNAPSHOTS_DIR, req.params.file);
     if (!fs.existsSync(filePath)) {
@@ -278,7 +274,6 @@ app.get("/snapshots/:file", (req, res) => {
         <input id="searchBox" placeholder="Filter by id, tag, class, or text..." type="text">
       </div>
 
-      <!-- Pretty Table View -->
       <div id="tableView">
         <table id="snapshotTable">
           <thead>
@@ -300,7 +295,6 @@ app.get("/snapshots/:file", (req, res) => {
       <script>
         const searchBox = document.getElementById('searchBox');
 
-        // Search filter
         searchBox.addEventListener('keyup', function() {
           const filter = searchBox.value.toLowerCase();
           const rows = document.querySelectorAll('#snapshotTable tbody tr');
